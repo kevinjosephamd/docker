@@ -1,0 +1,13 @@
+CompileFlags:
+  Add:
+    - "--no-cuda-version-check"
+    - -I/opt/rocm/include
+    - -xcuda
+    - --no-cuda-version-check
+    - -D__HIP_PLATFORM_AMD__=1
+    - -D__HIP__
+    - -nocudainc
+    - -nocudalib
+    - -D__AMDGCN_WAVEFRONT_SIZE=64
+  Remove:
+    - --offload-arch=*
