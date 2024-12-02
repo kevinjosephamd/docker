@@ -5,8 +5,12 @@ RUN apt-get install sudo
 
 # ROCm
 # We're installing a specific version of ROCm here
-RUN wget https://repo.radeon.com/amdgpu-install/6.2.4/ubuntu/jammy/amdgpu-install_6.2.60204-1_all.deb
-RUN apt install -y ./amdgpu-install_6.2.60204-1_all.deb && rm ./amdgpu-install_6.2.60204-1_all.deb
+RUN wget https://artifactory-cdn.amd.com/artifactory/list/amdgpu-deb/amdgpu-install-internal_6.3-22.04-1_all.deb
+RUN apt install -y ./amdgpu-install-internal_6.3-22.04-1_all.deb
+RUN sh -c 'echo deb [arch=amd64 trusted=yes] https://compute-artifactory.amd.com/artifactory/list/rocm-release-archive-22.04-deb/ 6.3 rel-38 > /etc/apt/sources.list.d/rocm-build.list'
+RUN amdgpu-repo --amdgpu-build=2084815
+RUN rm ./amdgpu-install-internal_6.3-22.04-1_all.deb
+
 # Specify usecases
 RUN amdgpu-install -y --usecase="graphics,opencl,hip,rocm,rocmdev,rocmdevtools,lrt,opencl,hiplibsdk" --no-dkms
 # Setup system .so paths for the system dynamic linker
