@@ -4,7 +4,15 @@ set -e
 # STEP 1 Build base image
 DOCKER_FILE=$1
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-docker buildx build  -t base:kevin -f ${DOCKER_FILE} ${SCRIPT_DIR}
+DOCKER_VERSION=$(docker --version | grep -P -o  "Docker version \d+.\d+.\d+" | grep -P -o  -h  "\d+\.\d+\.\d+")
+DOCKER_MAJOR_VERSION=$(echo ${DOCKER_VERSION} | cut -d'.' -f1)
+
+if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
+    docker buildx build  -t base:${USER} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+else
+    export DOCKER_BUILDKIT=1
+    docker build -t base:${USER} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+fi
 
 # STEP 2 Build dev image
 # Create the actual dev image with the host user mirrored in the docker image
@@ -12,7 +20,7 @@ imageName=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')
 echo "Creating the image: $imageName"
 USERID=$(id -u)
 docker build -t $imageName - << EOF
-FROM base:kevin
+FROM base:${USER}
 
 RUN useradd -ms /bin/bash $USER -u $USERID
 ARG DEBIAN_FRONTEND=noninteractive
@@ -48,12 +56,14 @@ then
     docker rm $CONTAINER_NAME
 fi
 
-docker run --cap-add=SYS_PTRACE --ipc=host --privileged=true \
+ARGS="--cap-add=SYS_PTRACE --ipc=host --privileged=true \
            --shm-size=128GB --network=host --device=/dev/kfd \
            --device=/dev/dri --group-add video \
-           --group-add render \
            -v /home/$USER:/home/$USER \
            --user $USER \
            --name $CONTAINER_NAME \
-           -d \
+           --group-add render \
+           -d"
+
+docker run ${ARGS} \
            $imageName tail -f /dev/null
