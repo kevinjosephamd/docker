@@ -19,6 +19,8 @@ fi
 imageName=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')
 echo "Creating the image: $imageName"
 USERID=$(id -u)
+RENDER_GROUP_ID=$(getent group render | cut -d: -f3)
+VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
 docker build -t $imageName - << EOF
 FROM base:${USER}
 
@@ -34,7 +36,10 @@ RUN  mkdir -p /home/$USER &&  \
     echo "$USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USER && \
     chmod 0440 /etc/sudoers.d/$USER && \
     chown $USER:$USER -R /home/$USER
-
+# Delete group if it exists
+RUN groupdel render; exit 0
+RUN groupadd -f -g ${RENDER_GROUP_ID} render
+RUN groupadd -f -g ${VIDEO_GROUP_ID} video
 
 USER $USER
 ENV HOME /home/$USER
@@ -56,13 +61,18 @@ then
     docker rm $CONTAINER_NAME
 fi
 
-ARGS="--cap-add=SYS_PTRACE --ipc=host --privileged=true \
-           --shm-size=128GB --network=host --device=/dev/kfd \
-           --device=/dev/dri --group-add video \
+ARGS="--cap-add=SYS_PTRACE \
+           --ipc=host \
+           --privileged=true \
+           --shm-size=128GB \
+           --network=host \
+           --group-add render \
+           --group-add video \
+           --device=/dev/kfd \
+           --device=/dev/dri \
            -v /home/$USER:/home/$USER \
            --user $USER \
            --name $CONTAINER_NAME \
-           --group-add render \
            -d"
 
 docker run ${ARGS} \
