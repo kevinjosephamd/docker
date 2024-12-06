@@ -35,3 +35,14 @@ RUN wget https://github.com/zellij-org/zellij/releases/download/v0.41.2/zellij-x
 
 RUN apt-get install -y clangd
 RUN apt-get install -y libblas-dev liblapack-dev
+
+# Install UCX
+RUN wget https://github.com/openucx/ucx/releases/download/v1.17.0/ucx-1.17.0.tar.gz
+RUN tar xzf ucx-1.17.0.tar.gz && cd ucx-1.17.0 &&  ./contrib/configure-release --prefix=/usr --with-rocm=/opt/rocm && make -j32 && make install
+RUN rm -rf ucx-1.17.0.tar.gz ucx-1.17.0
+
+#Install OpenMPI
+RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.6.tar.bz2
+RUN bzip2 -d openmpi-5.0.6.tar.bz2 && tar -xvf openmpi-5.0.6.tar && cd openmpi-5.0.6 && mkdir build && cd build && ../configure --prefix=/usr --with-ucx=/usr --with-rocm=/opt/rocm && make -j $(nproc) && make install
+RUN rm -rf openmpi-5.0.6.tar.bz2 openmpi-5.0.6
+
