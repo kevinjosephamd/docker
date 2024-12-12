@@ -66,6 +66,7 @@ ARGS="--cap-add=SYS_PTRACE \
            --privileged=true \
            --shm-size=128GB \
            --network=host \
+           --security-opt seccomp=unconfined \
            --group-add render \
            --group-add video \
            --device=/dev/kfd \
