@@ -21,6 +21,9 @@ echo "Creating the image: $imageName"
 USERID=$(id -u)
 RENDER_GROUP_ID=$(getent group render | cut -d: -f3)
 VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
+
+read -p "Enter container password to set: " CONTAINER_PASSWORD
+
 docker build -t $imageName - << EOF
 FROM base:${USER}
 
@@ -36,6 +39,9 @@ RUN  mkdir -p /home/$USER &&  \
     echo "$USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USER && \
     chmod 0440 /etc/sudoers.d/$USER && \
     chown $USER:$USER -R /home/$USER
+# Setup for sshd
+RUN echo "$USER:$CONTAINER_PASSWORD" | chpasswd
+RUN mkdir /var/run/sshd
 # Delete group if it exists
 RUN groupdel render; exit 0
 RUN groupadd -f -g ${RENDER_GROUP_ID} render
@@ -45,6 +51,7 @@ USER $USER
 ENV HOME /home/$USER
 WORKDIR /home/$USER
 ENV PS1 '\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+ENTRYPOINT sudo sshd -p 6666 && tail -f /dev/null
 EOF
 
 # Step 3 Create and launch container
@@ -77,4 +84,4 @@ ARGS="--cap-add=SYS_PTRACE \
            -d"
 
 docker run ${ARGS} \
-           $imageName tail -f /dev/null
+           $imageName

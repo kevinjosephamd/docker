@@ -46,3 +46,6 @@ RUN rm -rf ucx-1.17.0.tar.gz ucx-1.17.0
 RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.6.tar.bz2
 RUN bzip2 -d openmpi-5.0.6.tar.bz2 && tar -xvf openmpi-5.0.6.tar && cd openmpi-5.0.6 && mkdir build && cd build && ../configure --prefix=/usr --with-ucx=/usr --with-rocm=/opt/rocm && make -j $(nproc) && make install
 RUN rm -rf openmpi-5.0.6.tar.bz2 openmpi-5.0.6
+
+# Install SSH server
+RUN apt-get install -y openssh-server
