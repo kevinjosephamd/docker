@@ -1,28 +1,58 @@
+#!/usr/bin/env bash
 
 set -e
+
+usage() {
+  cat <<EOF
+Usage: $0 [OPTION]... [DOCKER_FILE]
+
+Description:
+  This script builds a Docker image from a specified Dockerfile. It creates and runs a container from this image.
+
+Options:
+  -h, --help    Show this help message and exit
+
+Example:
+  $0 ./Dockerfile
+EOF
+  exit 0
+}
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  usage
+fi
+
 
 # STEP 1 Build base image
 DOCKER_FILE=$1
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 DOCKER_VERSION=$(docker --version | grep -P -o  "Docker version \d+.\d+.\d+" | grep -P -o  -h  "\d+\.\d+\.\d+")
 DOCKER_MAJOR_VERSION=$(echo ${DOCKER_VERSION} | cut -d'.' -f1)
+BASE_IMAGE=base:${USER}_$(date +"%y-%m-%d")
+DEV_IMAGE_NAME=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')
+CONTAINER_NAME="$(uuidgen)_rocmdev_container"
 
 if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
-    docker buildx build  -t base:${USER} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker buildx build  -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
 else
     export DOCKER_BUILDKIT=1
-    docker build -t base:${USER} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker build -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
 fi
 
 # STEP 2 Build dev image
 # Create the actual dev image with the host user mirrored in the docker image
-imageName=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')
-echo "Creating the image: $imageName"
+echo "Creating the image: $DEV_IMAGE_NAME"
 USERID=$(id -u)
 RENDER_GROUP_ID=$(getent group render | cut -d: -f3)
 VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
-docker build -t $imageName - << EOF
-FROM base:${USER}
+docker build -t $DEV_IMAGE_NAME - << EOF
+FROM ${BASE_IMAGE}
+RUN apt-get install -y ssh
+RUN wget https://github.com/zellij-org/zellij/releases/download/v0.41.2/zellij-x86_64-unknown-linux-musl.tar.gz &&  \
+    tar -xvf zellij-x86_64-unknown-linux-musl.tar.gz && \
+    rm zellij-x86_64-unknown-linux-musl.tar.gz && mv zellij /usr/bin/zellij
+RUN add-apt-repository ppa:maveonair/helix-editor && apt update && apt install -y helix
+RUN apt-get install -y clangd clang-format
 
 RUN useradd -ms /bin/bash $USER -u $USERID
 ARG DEBIAN_FRONTEND=noninteractive
@@ -48,18 +78,8 @@ ENV PS1 '\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u
 EOF
 
 # Step 3 Create and launch container
-CONTAINER_NAME="${imageName}_container"
-if [ "$(docker ps | grep -o $CONTAINER_NAME)" = "$CONTAINER_NAME" ]
-then
-    echo "Stopping running container"
-    docker stop $CONTAINER_NAME
-fi
-
-if [ "$(docker container ls -a | grep -o $CONTAINER_NAME)" = "$CONTAINER_NAME" ]
-then
-    echo "Removing old container"
-    docker rm $CONTAINER_NAME
-fi
+docker ps -q --filter "name=rocmdev_container" | xargs -I {} docker stop {}
+docker ps -aq --filter "name=rocmdev_container" | xargs -I {} docker rm {}
 
 ARGS="--cap-add=SYS_PTRACE \
            --ipc=host \
@@ -77,4 +97,4 @@ ARGS="--cap-add=SYS_PTRACE \
            -d"
 
 docker run ${ARGS} \
-           $imageName tail -f /dev/null
+           $DEV_IMAGE_NAME tail -f /dev/null
