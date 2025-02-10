@@ -47,6 +47,7 @@ RENDER_GROUP_ID=$(getent group render | cut -d: -f3)
 VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
 docker build -t $DEV_IMAGE_NAME - << EOF
 FROM ${BASE_IMAGE}
+RUN apt-get update
 RUN apt-get install -y ssh curl
 RUN wget https://github.com/zellij-org/zellij/releases/download/v0.41.2/zellij-x86_64-unknown-linux-musl.tar.gz &&  \
     tar -xvf zellij-x86_64-unknown-linux-musl.tar.gz && \
@@ -57,7 +58,8 @@ RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:\$PATH"
 RUN mkdir -p /helix_editor
 WORKDIR /helix_editor
-RUN git clone https://github.com/helix-editor/helix.git && cd helix && cargo install --path helix-term --locked --root /usr/local/
+RUN git clone https://github.com/helix-editor/helix.git
+RUN cd helix && ulimit -n 4096 && cargo install --path helix-term --locked --root /usr/local/
 ENV HELIX_RUNTIME=/helix_editor/helix/runtime
 
 RUN useradd -ms /bin/bash $USER -u $USERID
