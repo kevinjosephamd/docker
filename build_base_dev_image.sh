@@ -57,7 +57,8 @@ RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:\$PATH"
 RUN mkdir -p /helix_editor
 WORKDIR /helix_editor
-RUN git clone https://github.com/helix-editor/helix.git && cd helix && cargo install --path helix-term --locked --root /usr/local/
+RUN git clone https://github.com/helix-editor/helix.git
+RUN cd helix && ulimit -n 4096 && cargo install --path helix-term --locked --root /usr/local/
 ENV HELIX_RUNTIME=/helix_editor/helix/runtime
 
 RUN useradd -ms /bin/bash $USER -u $USERID
