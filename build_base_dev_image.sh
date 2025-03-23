@@ -30,7 +30,7 @@ DOCKER_VERSION=$(docker --version | grep -P -o  "Docker version \d+.\d+.\d+" | g
 DOCKER_MAJOR_VERSION=$(echo ${DOCKER_VERSION} | cut -d'.' -f1)
 BASE_IMAGE=base:${USER}_$(date +"%y-%m-%d")
 DEV_IMAGE_NAME=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')
-CONTAINER_NAME="${USER}_rocmdev_container"
+CONTAINER_NAME="${USER}_dev_container"
 
 if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
     docker buildx build  -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
@@ -48,25 +48,10 @@ VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
 docker build -t $DEV_IMAGE_NAME - << EOF
 FROM ${BASE_IMAGE}
 RUN apt-get update
-RUN apt-get install -y ssh curl
-RUN wget https://github.com/zellij-org/zellij/releases/download/v0.41.2/zellij-x86_64-unknown-linux-musl.tar.gz &&  \
-    tar -xvf zellij-x86_64-unknown-linux-musl.tar.gz && \
-    rm zellij-x86_64-unknown-linux-musl.tar.gz && mv zellij /usr/bin/zellij
-RUN apt-get install -y clangd clang-format
-
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
-ENV PATH="/root/.cargo/bin:\$PATH"
-RUN mkdir -p /helix_editor
-WORKDIR /helix_editor
-RUN git clone https://github.com/helix-editor/helix.git
-RUN cd helix && ulimit -n 4096 && cargo install --path helix-term --locked --root /usr/local/
-ENV HELIX_RUNTIME=/helix_editor/helix/runtime
-
-RUN useradd -ms /bin/bash $USER -u $USERID
+RUN userdel -r ubuntu || true
+RUN useradd -o -ms /bin/bash $USER -u $USERID
 ARG DEBIAN_FRONTEND=noninteractive
-
 # create the same user in docker as in outside
-RUN apt-get update
 RUN apt-get install sudo
 RUN  mkdir -p /home/$USER &&  \
     echo "$USER:x:1000:1000:$USER,,,:/home/$USER:/bin/bash" >> /etc/passwd && \
@@ -87,23 +72,29 @@ EOF
 
 # Step 3 Create and launch container
 echo "Stopping old $CONTAINER_NAME"
-docker ps -q --filter "name=rocmdev_container" | xargs -I {} docker stop {}
-docker ps -aq --filter "name=rocmdev_container" | xargs -I {} docker rm {}
+docker ps -q --filter name=$CONTAINER_NAME | xargs -I {} docker stop {}
+docker ps -aq --filter name=$CONTAINER_NAME | xargs -I {} docker rm {}
 
 ARGS="--cap-add=SYS_PTRACE \
            --ipc=host \
            --privileged=true \
            --shm-size=128GB \
            --network=host \
-           --security-opt seccomp=unconfined \
-           --group-add render \
-           --group-add video \
-           --device=/dev/kfd \
-           --device=/dev/dri \
            -v /home/$USER:/home/$USER \
            --user $USER \
            --name $CONTAINER_NAME \
            -d"
+
+if [[ -z "${NVIDIA_ENV}" ]]; then
+  ARGS="${ARGS} --runtime=nvidia --gpus all"
+else
+  ARGS="${ARGS} \
+           --security-opt seccomp=unconfined \
+           --group-add render \
+           --group-add video \
+           --device=/dev/kfd \
+           --device=/dev/dri"
+fi
 
 echo "Starting $CONTAINER_NAME"
 docker run ${ARGS} \
