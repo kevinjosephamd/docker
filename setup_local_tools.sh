@@ -2,7 +2,8 @@
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-mkdir -p ~/rust_tools && pushd ~/rust_tools
+mkdir -p ~/rust_tools
+pushd ~/rust_tools
 
 # Install helix editor
 mkdir -p ~/.config/helix
