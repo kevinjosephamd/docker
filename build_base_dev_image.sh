@@ -85,7 +85,7 @@ ARGS="--cap-add=SYS_PTRACE \
            --name $CONTAINER_NAME \
            -d"
 
-if [[ -z "${NVIDIA_ENV}" ]]; then
+if [[ -v NVIDIA_ENV ]]; then
   ARGS="${ARGS} --runtime=nvidia --gpus all"
 else
   ARGS="${ARGS} \
