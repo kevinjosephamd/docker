@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 usage() {
   cat <<EOF
@@ -11,14 +11,33 @@ Description:
 
 Options:
   -h, --help    Show this help message and exit
+  --no-cache    Force rebuild from base image.
 
 Example:
   $0 ./Dockerfile
 EOF
-  exit 0
+  1>&2;
+  exit 1
 }
 
-if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+while (( $# )); do
+  case "$1" in
+    -h|--help)
+        usage ;;
+    --no-cache)
+        no_cache="--no-cache"; shift ;;
+    --)         # explicit end of flags: ./script -- --no-cache file.txt
+        shift; break ;;
+    -*)         # any other -something
+        echo "ERROR: unknown option '$1'" >&2
+        usage; ;;
+    *)          # first non-flag -> positional arg(s)
+        break ;;
+  esac
+done
+
+if (( $# != 1 )); then
+  echo "ERROR: exactly one positional argument expected" >&2
   usage
 fi
 
@@ -33,10 +52,10 @@ DEV_IMAGE_NAME=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)
 CONTAINER_NAME="${USER}_dev_container"
 
 if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
-    docker buildx build  -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker buildx build  ${no_cache} -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
 else
     export DOCKER_BUILDKIT=1
-    docker build -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker build -t ${no_cache} ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
 fi
 
 # STEP 2 Build dev image
