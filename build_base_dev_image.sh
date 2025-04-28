@@ -20,6 +20,7 @@ EOF
   exit 1
 }
 
+no_cache=""
 while (( $# )); do
   case "$1" in
     -h|--help)
