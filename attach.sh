@@ -6,4 +6,4 @@ then
     exit
 fi
 
-docker exec -it -e force_color_prompt=yes -u $USER:$USER ${CONTAINER_NAME} bash
+docker exec -it -e TERM=xterm-256color -e force_color_prompt=yes -u $USER:$USER ${CONTAINER_NAME} fish

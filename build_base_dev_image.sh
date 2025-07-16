@@ -68,6 +68,7 @@ VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
 docker build -t $DEV_IMAGE_NAME - << EOF
 FROM ${BASE_IMAGE}
 RUN apt-get update
+RUN apt-get install -y fish ripgrep less
 RUN userdel -r ubuntu || true
 RUN useradd -o -ms /bin/bash $USER -u $USERID
 ARG DEBIAN_FRONTEND=noninteractive
@@ -80,11 +81,11 @@ RUN  mkdir -p /home/$USER &&  \
     chmod 0440 /etc/sudoers.d/$USER && \
     chown $USER:$USER -R /home/$USER
 # Delete group if it exists
-RUN groupdel render; exit 0
+RUN groupdel render || exit 0
 RUN groupadd -f -g ${RENDER_GROUP_ID} render
 RUN groupadd -f -g ${VIDEO_GROUP_ID} video
-
 USER $USER
+RUN sudo chsh -s fish
 ENV HOME /home/$USER
 WORKDIR /home/$USER
 ENV PS1 '\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
