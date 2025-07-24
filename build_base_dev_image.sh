@@ -65,15 +65,23 @@ echo "Creating the image: $DEV_IMAGE_NAME"
 USERID=$(id -u)
 RENDER_GROUP_ID=$(getent group render | cut -d: -f3)
 VIDEO_GROUP_ID=$(getent group video | cut -d: -f3)
-docker build -t $DEV_IMAGE_NAME - << EOF
+DOCKER_BUILDKIT=1 docker build -t $DEV_IMAGE_NAME - << EOF
+# syntax=docker/dockerfile:1
 FROM ${BASE_IMAGE}
-RUN apt-get update
-RUN apt-get install -y fish ripgrep less
+RUN <<EOT
+    # Check if this is a Debian based image
+    if [ -f /etc/debian_version ]; then
+      apt-get update
+      apt-get install -y sudo fish ripgrep less
+    else
+      # Assume it is a RPM based distro
+      dnf install -y sudo fish ripgrep less util-linux-user
+    fi
+EOT
 RUN userdel -r ubuntu || true
 RUN useradd -o -ms /bin/bash $USER -u $USERID
 ARG DEBIAN_FRONTEND=noninteractive
 # create the same user in docker as in outside
-RUN apt-get install sudo
 RUN  mkdir -p /home/$USER &&  \
     echo "$USER:x:1000:1000:$USER,,,:/home/$USER:/bin/bash" >> /etc/passwd && \
     echo "$USER:x:1000:" >> /etc/group && \
@@ -82,10 +90,11 @@ RUN  mkdir -p /home/$USER &&  \
     chown $USER:$USER -R /home/$USER
 # Delete group if it exists
 RUN groupdel render || exit 0
+RUN groupdel video || exit 0
 RUN groupadd -f -g ${RENDER_GROUP_ID} render
 RUN groupadd -f -g ${VIDEO_GROUP_ID} video
 USER $USER
-RUN sudo chsh -s fish
+RUN sudo chsh -s \$(which fish)
 ENV HOME /home/$USER
 WORKDIR /home/$USER
 ENV PS1 '\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
