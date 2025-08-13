@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+set -x
 
 usage() {
   cat <<EOF
@@ -49,8 +50,8 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 DOCKER_VERSION=$(docker --version | grep -P -o  "Docker version \d+.\d+.\d+" | grep -P -o  -h  "\d+\.\d+\.\d+")
 DOCKER_MAJOR_VERSION=$(echo ${DOCKER_VERSION} | cut -d'.' -f1)
 BASE_IMAGE=base:${USER}_$(date +"%y-%m-%d")
-DEV_IMAGE_NAME=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')
-CONTAINER_NAME="${USER}_dev_container"
+DEV_IMAGE_NAME=${DEV_IMAGE_NAME:=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')}
+CONTAINER_NAME=${CONTAINER_NAME:="${USER}_dev_container"}
 
 if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
     docker buildx build  ${no_cache} -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
@@ -110,10 +111,13 @@ ARGS="--cap-add=SYS_PTRACE \
            --privileged=true \
            --shm-size=128GB \
            --network=host \
-           -v /home/$USER:/home/$USER \
+           -v $HOME:/home/$USER \
            --user $USER \
            --name $CONTAINER_NAME \
            -d"
+if [ -d /workdir ]; then
+  ARGS="${ARGS} -v /workdir:/home/$USER/workdir "
+fi
 
 if [[ -v NVIDIA_ENV ]]; then
   ARGS="${ARGS} --runtime=nvidia --gpus all"
