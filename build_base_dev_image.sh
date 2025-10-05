@@ -106,12 +106,14 @@ echo "Stopping old $CONTAINER_NAME"
 docker ps -q --filter name=$CONTAINER_NAME | xargs -I {} docker stop {}
 docker ps -aq --filter name=$CONTAINER_NAME | xargs -I {} docker rm {}
 
+ADDITIONAL_MOUNTS=${ADDITIONAL_MOUNTS:-""}
+
 ARGS="--cap-add=SYS_PTRACE \
            --ipc=host \
            --privileged=true \
            --shm-size=128GB \
            --network=host \
-           -v $HOME:/home/$USER \
+           -v $HOME:/home/$USER ${ADDITIONAL_MOUNTS}\
            --user $USER \
            --name $CONTAINER_NAME \
            -d"
