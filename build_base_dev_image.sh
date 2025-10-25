@@ -22,10 +22,13 @@ EOF
 }
 
 no_cache=""
+PORT=50000
 while (( $# )); do
   case "$1" in
     -h|--help)
         usage ;;
+    -p|--port)
+        PORT=$2; shift shift ;;
     --no-cache)
         no_cache="--no-cache"; shift ;;
     --)         # explicit end of flags: ./script -- --no-cache file.txt
@@ -42,6 +45,8 @@ if (( $# != 1 )); then
   echo "ERROR: exactly one positional argument expected" >&2
   usage
 fi
+
+echo "Using Port: $PORT"
 
 
 # STEP 1 Build base image
@@ -94,6 +99,15 @@ RUN groupdel render || exit 0
 RUN groupdel video || exit 0
 RUN groupadd -f -g ${RENDER_GROUP_ID} render
 RUN groupadd -f -g ${VIDEO_GROUP_ID} video
+
+RUN <<EOT
+apt-get install openssh-server sudo -y
+echo "Port 50000" >> /etc/ssh/sshd_config
+echo "LogLevel DEBUG3" >> /etc/ssh/sshd_config
+mkdir -p /run/sshd
+service ssh start
+EOT
+
 USER $USER
 RUN sudo chsh -s \$(which fish)
 ENV HOME /home/$USER
@@ -134,4 +148,4 @@ fi
 
 echo "Starting $CONTAINER_NAME"
 docker run ${ARGS} \
-           $DEV_IMAGE_NAME tail -f /dev/null
+           $DEV_IMAGE_NAME /usr/sbin/sshd -D -e
