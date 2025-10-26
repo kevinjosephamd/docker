@@ -28,7 +28,9 @@ while (( $# )); do
     -h|--help)
         usage ;;
     -p|--port)
-        PORT=$2; shift shift ;;
+        PORT=$2;
+        shift
+        shift ;;
     --no-cache)
         no_cache="--no-cache"; shift ;;
     --)         # explicit end of flags: ./script -- --no-cache file.txt
@@ -78,10 +80,10 @@ RUN <<EOT
     # Check if this is a Debian based image
     if [ -f /etc/debian_version ]; then
       apt-get update
-      apt-get install -y sudo fish ripgrep less
+      apt-get install -y sudo fish ripgrep less openssh-server
     else
       # Assume it is a RPM based distro
-      dnf install -y sudo fish ripgrep less util-linux-user
+      dnf install -y sudo fish ripgrep less util-linux-user openssh-server
     fi
 EOT
 RUN userdel -r ubuntu || true
@@ -101,11 +103,12 @@ RUN groupadd -f -g ${RENDER_GROUP_ID} render
 RUN groupadd -f -g ${VIDEO_GROUP_ID} video
 
 RUN <<EOT
-apt-get install openssh-server sudo -y
-echo "Port 50000" >> /etc/ssh/sshd_config
+echo "Port ${PORT}" >> /etc/ssh/sshd_config
 echo "LogLevel DEBUG3" >> /etc/ssh/sshd_config
+echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+echo "PermitRootLogin no" >> /etc/ssh/sshd_config
+echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
 mkdir -p /run/sshd
-service ssh start
 EOT
 
 USER $USER
@@ -128,7 +131,7 @@ ARGS="--cap-add=SYS_PTRACE \
            --shm-size=128GB \
            --network=host \
            -v $HOME:/home/$USER ${ADDITIONAL_MOUNTS}\
-           --user $USER \
+           --user root \
            --name $CONTAINER_NAME \
            -d"
 if [ -d /workdir ]; then
@@ -146,6 +149,26 @@ else
            --device=/dev/dri"
 fi
 
+
+SSH_DIR="$HOME/.ssh"
+AUTH_KEYS="$SSH_DIR/authorized_keys"
+chmod 700 $SSH_DIR
+chmod 600 $AUTH_KEYS
+for key in id_rsa.pub id_ed25519.pub id_ecdsa.pub; do
+    key_path="$SSH_DIR/$key"
+    [ -f "$key_path" ] || continue
+
+    pub_key=$(<"$key_path")
+    touch "$AUTH_KEYS"
+    if ! grep -qxF "$pub_key" "$AUTH_KEYS"; then
+        echo "$pub_key" >> "$AUTH_KEYS"
+        echo "Added $key to $AUTH_KEYS"
+    else
+        echo "$key already present in $AUTH_KEYS"
+    fi
+done
+
+
 echo "Starting $CONTAINER_NAME"
 docker run ${ARGS} \
-           $DEV_IMAGE_NAME /usr/sbin/sshd -D -e
+           $DEV_IMAGE_NAME  bash -c "ssh-keygen -A && /usr/sbin/sshd -D -e"
