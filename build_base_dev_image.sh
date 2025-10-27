@@ -102,6 +102,9 @@ RUN groupdel video || exit 0
 RUN groupadd -f -g ${RENDER_GROUP_ID} render
 RUN groupadd -f -g ${VIDEO_GROUP_ID} video
 
+RUN usermod -a -G render $USER
+RUN usermod -a -G video $USER
+
 RUN <<EOT
 echo "Port ${PORT}" >> /etc/ssh/sshd_config
 echo "LogLevel DEBUG3" >> /etc/ssh/sshd_config
