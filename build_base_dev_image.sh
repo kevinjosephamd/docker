@@ -141,15 +141,23 @@ if [ -d /workdir ]; then
   ARGS="${ARGS} -v /workdir:/home/$USER/workdir "
 fi
 
+if [ -d /nix/store ]; then
+  ARGS="${ARGS} -v /nix/store:/nix/store "
+fi
+
 if [[ -v NVIDIA_ENV ]]; then
   ARGS="${ARGS} --runtime=nvidia --gpus all"
 else
   ARGS="${ARGS} \
            --security-opt seccomp=unconfined \
            --group-add render \
-           --group-add video \
-           --device=/dev/kfd \
-           --device=/dev/dri"
+           --group-add video"
+  if [ -e /dev/kfd ]; then
+    ARGS="${ARGS} --device=/dev/kfd"
+  fi
+  if [ -e /dev/dri ]; then
+    ARGS="${ARGS} --device=/dev/dri"
+  fi
 fi
 
 

@@ -1,0 +1,1 @@
+FROM rocm/dev-ubuntu-24.04:7.0.2
