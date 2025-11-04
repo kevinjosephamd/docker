@@ -13,6 +13,7 @@ Description:
 Options:
   -h, --help    Show this help message and exit
   --no-cache    Force rebuild from base image.
+  --no-sshd     Do not start sshd in the container.
 
 Example:
   $0 ./Dockerfile
@@ -33,6 +34,8 @@ while (( $# )); do
         shift ;;
     --no-cache)
         no_cache="--no-cache"; shift ;;
+    --no-sshd)
+        NO_SSHD=1; shift ;;
     --)         # explicit end of flags: ./script -- --no-cache file.txt
         shift; break ;;
     -*)         # any other -something
@@ -181,5 +184,13 @@ done
 
 
 echo "Starting $CONTAINER_NAME"
-docker run ${ARGS} \
-           $DEV_IMAGE_NAME  bash -c "ssh-keygen -A && /usr/sbin/sshd -D -e"
+
+if [ ! -z ${NO_SSHD+x} ]; then
+    docker run ${ARGS} \
+           $DEV_IMAGE_NAME  bash -c "tail -f /dev/null"
+    exit 0
+else
+      docker run ${ARGS} \
+                $DEV_IMAGE_NAME  bash -c "ssh-keygen -A && /usr/sbin/sshd -D -e"
+fi
+
