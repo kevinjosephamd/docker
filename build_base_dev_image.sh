@@ -14,6 +14,7 @@ Options:
   -h, --help    Show this help message and exit
   --no-cache    Force rebuild from base image.
   --no-sshd     Do not start sshd in the container.
+  --build-arg   Docker build arguments to pass to the build command. Key=Value pairs.
 
 Example:
   $0 ./Dockerfile
@@ -24,12 +25,17 @@ EOF
 
 no_cache=""
 PORT=50000
+DOCKER_BUILD_ARGS=""
 while (( $# )); do
   case "$1" in
     -h|--help)
         usage ;;
     -p|--port)
         PORT=$2;
+        shift
+        shift ;;
+    --build-arg)
+        DOCKER_BUILD_ARGS="${DOCKER_BUILD_ARGS} --build-arg $2 "
         shift
         shift ;;
     --no-cache)
@@ -64,10 +70,10 @@ DEV_IMAGE_NAME=${DEV_IMAGE_NAME:=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '
 CONTAINER_NAME=${CONTAINER_NAME:="${USER}_dev_container"}
 
 if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
-    docker buildx build  ${no_cache} -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker buildx build  ${no_cache} ${DOCKER_BUILD_ARGS} -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
 else
     export DOCKER_BUILDKIT=1
-    docker build -t ${no_cache} ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker build -t ${no_cache} ${DOCKER_BUILD_ARGS} ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
 fi
 
 # STEP 2 Build dev image
