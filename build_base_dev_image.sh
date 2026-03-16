@@ -93,15 +93,16 @@ RUN <<EOT
     else
       # Assume it is a RPM based distro
       dnf install -y sudo fish ripgrep less util-linux-user openssh-server
+      # Replace sudo PAM config with a minimal permissive one.
+      # The default AlmaLinux PAM stack fails in containers due to missing
+      # services (SSSD, systemd, etc.), blocking sudo even with NOPASSWD.
+      printf '#%%PAM-1.0\nauth sufficient pam_permit.so\naccount sufficient pam_permit.so\nsession sufficient pam_permit.so\n' > /etc/pam.d/sudo
     fi
 EOT
 RUN userdel -r ubuntu || true
-RUN useradd -o -ms /bin/bash $USER -u $USERID
+RUN useradd -ms /bin/bash $USER -u $USERID
 ARG DEBIAN_FRONTEND=noninteractive
-# create the same user in docker as in outside
-RUN  mkdir -p /home/$USER &&  \
-    echo "$USER:x:1000:1000:$USER,,,:/home/$USER:/bin/bash" >> /etc/passwd && \
-    echo "$USER:x:1000:" >> /etc/group && \
+RUN mkdir -p /home/$USER && \
     echo "$USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USER && \
     chmod 0440 /etc/sudoers.d/$USER && \
     chown $USER:$USER -R /home/$USER
