@@ -156,7 +156,11 @@ if [ -d /nix/store ]; then
 fi
 
 if [[ -v NVIDIA_ENV ]]; then
-  ARGS="${ARGS} --runtime=nvidia --gpus all"
+  # Use CDI to expose the GPU. The legacy "--runtime=nvidia --gpus all" needs
+  # the nvidia runtime registered in the docker daemon, which NixOS
+  # (hardware.nvidia-container-toolkit.enable) does not do; it generates CDI
+  # specs instead (/run/cdi/nvidia-container-toolkit.json).
+  ARGS="${ARGS} --device nvidia.com/gpu=all"
 else
   ARGS="${ARGS} \
            --security-opt seccomp=unconfined \
