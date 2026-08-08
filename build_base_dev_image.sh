@@ -15,6 +15,7 @@ Options:
   --no-cache    Force rebuild from base image.
   --no-sshd     Do not start sshd in the container.
   --build-arg   Docker build arguments to pass to the build command. Key=Value pairs.
+  --ca-cert     CA certificate to trust during the Docker build.
 
 Example:
   $0 ./Dockerfile
@@ -26,6 +27,7 @@ EOF
 no_cache=""
 PORT=50000
 DOCKER_BUILD_ARGS=""
+CA_CERT=""
 while (( $# )); do
   case "$1" in
     -h|--help)
@@ -36,6 +38,14 @@ while (( $# )); do
         shift ;;
     --build-arg)
         DOCKER_BUILD_ARGS="${DOCKER_BUILD_ARGS} --build-arg $2 "
+        shift
+        shift ;;
+    --ca-cert)
+        if [ -z "${2:-}" ]; then
+          echo "ERROR: --ca-cert requires a certificate path" >&2
+          usage
+        fi
+        CA_CERT=$2
         shift
         shift ;;
     --no-cache)
@@ -69,11 +79,39 @@ BASE_IMAGE=base:${USER}_$(date +"%y-%m-%d")
 DEV_IMAGE_NAME=${DEV_IMAGE_NAME:=$(basename "$DOCKER_FILE" | cut -d. -f1 | awk '{print tolower($0)}')}
 CONTAINER_NAME=${CONTAINER_NAME:="${USER}_dev_container"}
 
+# Make an optional build CA available as a BuildKit secret.
+DOCKER_BUILD_SECRETS=()
+if [ -n "$CA_CERT" ]; then
+    if [ ! -f "$CA_CERT" ] || [ ! -r "$CA_CERT" ]; then
+        echo "ERROR: CA certificate is not a readable file: $CA_CERT" >&2
+        exit 1
+    fi
+    DOCKER_BUILD_SECRETS+=(--secret "id=build_ca,src=$CA_CERT")
+
+    # Inject the CA into each build stage without modifying the caller's
+    # Dockerfile or copying the certificate into the build context.
+    EFFECTIVE_DOCKER_FILE=$(mktemp --suffix=.dockerfile)
+    trap 'rm -f "$EFFECTIVE_DOCKER_FILE"' EXIT
+    awk '
+      { print }
+      toupper($1) == "FROM" {
+        print "RUN --mount=type=secret,id=build_ca,required=true \\"
+        print "    if command -v update-ca-certificates >/dev/null; then \\"
+        print "      cp /run/secrets/build_ca /usr/local/share/ca-certificates/build-ca.crt && update-ca-certificates; \\"
+        print "    elif command -v update-ca-trust >/dev/null; then \\"
+        print "      cp /run/secrets/build_ca /etc/pki/ca-trust/source/anchors/build-ca.crt && update-ca-trust; \\"
+        print "    else echo \"No supported CA trust tool found\" >&2; exit 1; fi"
+      }
+    ' "$DOCKER_FILE" > "$EFFECTIVE_DOCKER_FILE"
+else
+    EFFECTIVE_DOCKER_FILE=$DOCKER_FILE
+fi
+
 if [ ${DOCKER_MAJOR_VERSION} -gt 20 ];then
-    docker buildx build  ${no_cache} ${DOCKER_BUILD_ARGS} -t ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker buildx build "${DOCKER_BUILD_SECRETS[@]}" ${no_cache} ${DOCKER_BUILD_ARGS} -t ${BASE_IMAGE} -f ${EFFECTIVE_DOCKER_FILE} ${SCRIPT_DIR}
 else
     export DOCKER_BUILDKIT=1
-    docker build -t ${no_cache} ${DOCKER_BUILD_ARGS} ${BASE_IMAGE} -f ${DOCKER_FILE} ${SCRIPT_DIR}
+    docker build "${DOCKER_BUILD_SECRETS[@]}" ${no_cache} ${DOCKER_BUILD_ARGS} -t ${BASE_IMAGE} -f ${EFFECTIVE_DOCKER_FILE} ${SCRIPT_DIR}
 fi
 
 # STEP 2 Build dev image
@@ -166,6 +204,19 @@ else
            --security-opt seccomp=unconfined \
            --group-add render \
            --group-add video"
+
+  # WSL exposes AMD GPUs through DXCore rather than the native Linux device
+  # nodes alone. These arguments supplement (rather than replace) the native
+  # Linux GPU arguments below, as required by librocdxg.
+  if grep -qi microsoft /proc/sys/kernel/osrelease; then
+    ARGS="${ARGS} \
+           --device=/dev/dxg \
+           -v /usr/lib/wsl/lib/libdxcore.so:/usr/lib/libdxcore.so \
+           -v /opt/rocm/lib/librocdxg.so:/usr/lib/librocdxg.so \
+           -v /opt/rocm/share/rocdxg/dids.conf:/usr/share/rocdxg/dids.conf \
+           -e HSA_ENABLE_DXG_DETECTION=1"
+  fi
+
   if [ -e /dev/kfd ]; then
     ARGS="${ARGS} --device=/dev/kfd"
   fi
@@ -204,4 +255,3 @@ else
       docker run ${ARGS} \
                 $DEV_IMAGE_NAME  bash -c "ssh-keygen -A && /usr/sbin/sshd -D -e"
 fi
-
