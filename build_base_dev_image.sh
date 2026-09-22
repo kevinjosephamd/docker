@@ -96,9 +96,20 @@ if [ -n "$CA_CERT" ]; then
       { print }
       toupper($1) == "FROM" {
         print "RUN --mount=type=secret,id=build_ca,required=true \\"
+        print "    if ! command -v update-ca-certificates >/dev/null && ! command -v update-ca-trust >/dev/null; then \\"
+        print "      if command -v apt-get >/dev/null; then \\"
+        print "        apt-get update && apt-get install -y --no-install-recommends ca-certificates; \\"
+        print "      elif command -v dnf >/dev/null; then \\"
+        print "        dnf install -y ca-certificates; \\"
+        print "      elif command -v yum >/dev/null; then \\"
+        print "        yum install -y ca-certificates; \\"
+        print "      fi; \\"
+        print "    fi && \\"
         print "    if command -v update-ca-certificates >/dev/null; then \\"
+        print "      mkdir -p /usr/local/share/ca-certificates && \\"
         print "      cp /run/secrets/build_ca /usr/local/share/ca-certificates/build-ca.crt && update-ca-certificates; \\"
         print "    elif command -v update-ca-trust >/dev/null; then \\"
+        print "      mkdir -p /etc/pki/ca-trust/source/anchors && \\"
         print "      cp /run/secrets/build_ca /etc/pki/ca-trust/source/anchors/build-ca.crt && update-ca-trust; \\"
         print "    else echo \"No supported CA trust tool found\" >&2; exit 1; fi"
       }
